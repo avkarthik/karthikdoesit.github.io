@@ -1,0 +1,103 @@
+---
+title: "PML Data Analysis"
+author: "Karthik AV"
+date: "Monday, October 19, 2015"
+output: html_document
+---
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+ 
+The goal of the project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. 
+ 
+## Approach
+ 
+The following is a brief on the approach used to pre-process the data and build a predictive model on the pre-processed data. 
+ 
+- Data Setup
+  - Studying the data
+	- Removing NAs
+	- Splitting data into test & train datasets
+
+- Data Analysis
+	- PCA for Factor Reduction
+	- Random forest Modelling
+	- Cross validation for calculating out of sample accuracy  
+  
+## Data Setup
+ 
+### Studying the data
+ 
+Loading the required packages. 
+```{r}
+library(caret)
+library(randomForest)
+```
+Loading the data. Here, I mention that "NA" & "" (blank) values should be considered as missing values. 
+```{r echo=FALSE}
+setwd("E:/R Workouts")
+```
+```{r}
+pmlTrain <- read.csv("pml-training.csv", na.strings = c("NA", ""))
+pmlTest <- read.csv("pml-testing.csv", na.strings = c("NA", ""))
+```
+
+After studying the data using str() & summary() command, removing those variables which do not help in predicting the outcome "classe".
+
+```{r}
+pmlTrain <- pmlTrain[,-c(1:7)]
+```
+ 
+### Removing NAs
+ 
+Models can't be built with missing values. Also the data set given has many variables which have only missing values. These variables are of no use for the current problem.
+```{r}
+pmlTrain_removedNAs <- pmlTrain[, apply(pmlTrain, 2, function(x) !any(is.na(x)))] 
+```
+ 
+### Splitting data into test & train datasets
+ 
+For cross validation and to calculate the Out-of-sample accuracy, the data set needs to be split into 2. The model will be built on the larger dataset and its accuracy will be tested on the smaller of the 2 datasets.
+```{r}
+indexTrain = createDataPartition(y = pmlTrain_removedNAs$classe, p = 0.75, list = FALSE)
+Train_subset = pmlTrain_removedNAs[indexTrain, ]
+Test_subset = pmlTrain_removedNAs[-indexTrain, ]
+```
+ 
+## Data Analysis
+  
+### PCA for Factor Reduction
+  
+Principal Component Analysis helps in reducing the number of independent variables (predictors). The predictors may be highly correlated with each other. These can be combined together without incurring much loss in the predictive power of the model. 
+```{r}
+preProc <- preProcess(Train_subset[, -53], method = "pca")
+```
+  
+Creating the training dataset with reduced number of variables.
+```{r}
+TrainPCA <- predict(preProc, Train_subset[, -53])
+```
+
+Creating the test dataset with reduced number of variables based on PCA from Training dataset.
+```{r}
+TestPCA <- predict(preProc, Test_subset[, -53])
+```
+
+### Random forest Modelling
+  
+Building a Random Forest Model on the Training Data set. The cross validation is done by specifying method as CV in traincontrol.  
+```{r}
+CV<-trainControl(method="cv", number=5, allowParallel=T)
+RFmodel <- train(Train_subset$classe ~ ., data = TrainPCA, method = "rf", trControl = CV)
+```
+  
+### Cross validation for calculating out of sample accuracy  
+  
+Applying the model built on the training data set to predict "classe"  from test dataset. Then the confusion matrix is built to find the accuracy of the model built.  
+```{r}
+predictedValues <- predict(RFmodel, newdata=TestPCA)
+confusionMatrix(Test_subset$classe, predictedValues)
+```
+  
+The Out-of-Sample Accuracy is 0.9839.  
+The Out-of-Sample Error is 0.0161.  
